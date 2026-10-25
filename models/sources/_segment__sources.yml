@@ -1,0 +1,36 @@
+version: 2
+
+sources:
+  - name: segment_us
+    description: Event stream for the us region.
+    meta:
+      external_location: "data/segment_us/{name}.parquet"
+    tables:
+      - name: pages
+        description: Page view events sent by the web app.
+      - name: tracks
+        description: Tracked user actions sent by the web app.
+      - name: identifies
+        description: Identify calls that link an anonymous_id to a user_id.
+  - name: segment_eu
+    description: Event stream for the eu region.
+    meta:
+      external_location: "data/segment_eu/{name}.parquet"
+    tables:
+      - name: pages
+        description: Page view events sent by the web app.
+      - name: tracks
+        description: Tracked user actions sent by the web app.
+      - name: identifies
+        description: Identify calls that link an anonymous_id to a user_id.
+  - name: segment_apac
+    description: Event stream for the apac region.
+    meta:
+      external_location: "data/segment_apac/{name}.parquet"
+    tables:
+      - name: pages
+        description: Page view events sent by the web app.
+      - name: tracks
+        description: Tracked user actions sent by the web app.
+      - name: identifies
+        description: Identify calls that link an anonymous_id to a user_id.

@@ -1,0 +1,48 @@
+version: 2
+
+sources:
+  - name: app_us
+    description: App database for the us region.
+    meta:
+      external_location: "data/app_us/{name}.parquet"
+    tables:
+      - name: organizations
+        description: One row per organization in the region.
+      - name: users
+        description: One row per user account created in the region.
+      - name: workspaces
+        description: One row per workspace. organization_id is the current owner.
+      - name: workspace_memberships
+        description: One row per user per workspace they belong to.
+      - name: runs
+        description: One row per run written by the backend.
+  - name: app_eu
+    description: App database for the eu region.
+    meta:
+      external_location: "data/app_eu/{name}.parquet"
+    tables:
+      - name: organizations
+        description: One row per organization in the region.
+      - name: users
+        description: One row per user account created in the region.
+      - name: workspaces
+        description: One row per workspace. organization_id is the current owner.
+      - name: workspace_memberships
+        description: One row per user per workspace they belong to.
+      - name: runs
+        description: One row per run written by the backend.
+  - name: app_apac
+    description: App database for the apac region.
+    meta:
+      external_location: "data/app_apac/{name}.parquet"
+    tables:
+      - name: organizations
+        description: One row per organization in the region.
+      - name: users
+        description: One row per user account created in the region.
+      - name: workspaces
+        description: One row per workspace. organization_id is the current owner.
+      - name: workspace_memberships
+        description: One row per user per workspace they belong to.
+      - name: runs
+        description: One row per run written by the backend.

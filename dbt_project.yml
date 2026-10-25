@@ -1,0 +1,12 @@
+name: agent_analytics
+version: "1.0.0"
+profile: agent_analytics
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets: ["target", "dbt_packages"]
+

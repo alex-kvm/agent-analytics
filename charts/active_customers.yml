@@ -1,0 +1,96 @@
+title: Active customers and what they use
+notes: |
+  Complete months, April to September 2026, UTC. Customer organizations exclude internal ones. Active users are
+  distinct people, counted once across organizations. Every query reads the marts built by uv run dbt build.
+  The weekly business review reads models/reports/rpt_weekly_business_review_table; its footnotes, keyed by the metric
+  number, are in WRITEUP.md. Weeks run Monday to Sunday, UTC; the four latest complete weeks end 27 September.
+
+queries:
+  wbr: |
+    select * exclude (sort_key) from rpt_weekly_business_review_table order by sort_key
+  latest: |
+    select
+      count(*) filter (where o.is_active) as active_orgs,
+      count(*) as customer_orgs,
+      (select count(distinct user_id) filter (where is_active_user)
+         from fct_user_activity_monthly where activity_month = (select max(activity_month) from fct_org_activity_monthly)) as active_users
+    from fct_org_activity_monthly as o
+    where o.activity_month = (select max(activity_month) from fct_org_activity_monthly)
+  by_month: |
+    with users as (
+      select activity_month, count(distinct user_id) filter (where is_active_user) as active_users
+      from fct_user_activity_monthly group by 1
+    )
+    select o.activity_month as month,
+           count(*) filter (where o.is_active) as active_orgs,
+           count(*) as customer_orgs,
+           any_value(u.active_users) as active_users
+    from fct_org_activity_monthly as o left join users as u using (activity_month)
+    group by 1 order by 1
+  areas: |
+    with sep as (
+      select * from fct_org_activity_monthly
+      where activity_month = (select max(activity_month) from fct_org_activity_monthly) and is_active
+    )
+    select area, round(100.0 * count(*) filter (where product_areas like '%' || area || '%') / (select count(*) from sep), 1) as pct_of_active_orgs
+    from sep, (values ('tracing'), ('playground'), ('experiments'), ('studio'), ('online_evaluation')) as t(area)
+    group by 1 order by 2 desc
+  segments: |
+    select plan || case when is_personal then ', personal' else '' end as segment,
+           count(*) filter (where is_active) as active_orgs, count(*) as customer_orgs
+    from fct_org_activity_monthly
+    where activity_month = (select max(activity_month) from fct_org_activity_monthly)
+    group by 1 order by 3 desc
+
+charts:
+  wbr_table:
+    query: wbr
+    type: table
+    title: Weekly business review (UTC)
+  k_orgs:
+    query: latest
+    type: kpi
+    value: active_orgs
+    label: Active organizations, last month
+    style:
+      value:
+        format: integer
+  k_users:
+    query: latest
+    type: kpi
+    value: active_users
+    label: Active users (distinct), last month
+    style:
+      value:
+        format: integer
+  orgs_trend:
+    query: by_month
+    type: line
+    title: Active organizations by month (UTC)
+    x: month
+    y: active_orgs
+  users_trend:
+    query: by_month
+    type: line
+    title: Active users, distinct, by month (UTC)
+    x: month
+    y: active_users
+  areas_bar:
+    query: areas
+    type: bar
+    title: Areas used, % of active orgs (UTC)
+    x: area
+    y: pct_of_active_orgs
+    sort:
+      by: pct_of_active_orgs
+      order: desc
+  segments_table:
+    query: segments
+    type: table
+    title: Active of customer orgs by segment (UTC)
+
+rows:
+  - cols: [wbr_table]
+  - cols: [k_orgs, k_users]
+  - cols: [orgs_trend, users_trend]
+  - cols: [areas_bar, segments_table]

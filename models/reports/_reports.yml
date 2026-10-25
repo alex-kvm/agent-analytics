@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: rpt_weekly_business_review
+    description: "The weekly business review's data tab (intent v3 Q6). Grain: period type (day, week, month) x period start x region, with a worldwide row per period. Counts follow the facts' rules and vars; ratios are computed from the counts. Periods not wholly inside the reporting window have null metrics."
+    columns:
+      - name: wbr_row_id
+        description: Primary key, period:period_start:region.
+        data_tests: [unique, not_null]
+      - name: period
+        description: Grain column, the period type, day, week (Monday to Sunday) or month, UTC.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["day", "week", "month"]
+      - name: period_start
+        description: Grain column, the period's first day.
+        data_tests: [not_null]
+      - name: period_end_date
+        description: The period's last day.
+        data_tests: [not_null]
+      - name: is_complete
+        description: The period lies wholly inside the reporting window; when false every metric is null (blank, not a drop).
+      - name: region
+        description: Grain column, worldwide or one of the regional deployments (us, eu, apac).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["worldwide", "us", "eu", "apac"]
+      - name: region_order
+        description: Worldwide first, then us, eu and apac, the row-block order.
+      - name: customer_orgs
+        description: Customer organizations that existed in the period. Additive across regions.
+      - name: active_orgs
+        description: Customer organizations active in the period, on the fact's rule. Additive across regions.
+      - name: pct_active
+        description: 100 x active_orgs / customer_orgs, from the counts. A rate; never average it across rows.
+      - name: active_users
+        description: Distinct active users, counted once per row however many organizations they were active in. Not additive across periods or, in general, across regions.
+      - name: users_per_active_org
+        description: active_users / active_orgs, from the counts. A ratio; never average it across rows.
+      - name: active_source_runs
+        description: Runs from var('active_run_sources'). Additive.
+      - name: online_evaluation_runs
+        description: Online-evaluator runs (automated; not activity on their own). Additive.
+  - name: rpt_weekly_business_review_table
+    description: "The weekly business review in the golden example's layout, every cell computed from rpt_weekly_business_review. Rows: a period-ending row, then a block per region (worldwide, us, eu, apac) with metrics 1-7. Columns: the four latest complete weeks and week-over-week change, the four latest complete months and month-over-month change; % change for counts, ratios and runs, basis points for the share, negatives in parentheses. Order by sort_key."
+    columns:
+      - name: sort_key
+        description: Primary key and row order, 100 x (block) + metric number.
+        data_tests: [unique, not_null]

@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: int_organizations
+    description: Organizations with members and the internal flags. is_internal is the hand-maintained list plus organizations that internal staff created and are the only members of.
+    columns:
+      - name: organization_id
+        description: Primary key, one row per organization.
+        data_tests: [unique, not_null]
+      - name: created_by_user_id
+        description: Foreign key to stg_app__users, the creator; used for the derived internal flag.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: is_internal
+        description: On the internal list, or created by internal staff who are its only members.
+        data_tests: [not_null]
+
+  - name: int_user_events
+    description: Page views and track calls as one event stream with product_area from the product_areas seed. A track's event name decides its area over the page it fired on.
+    columns:
+      - name: event_id
+        description: Primary key, the page view's or track call's event_id.
+        data_tests: [unique, not_null]
+      - name: anonymous_id
+        description: The browser's anonymous id; not resolved to a user (D11), since every event without a user_id is a login view.
+      - name: user_id
+        description: Foreign key to stg_app__users; null for anonymous login views, which the facts leave out.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: organization_id
+        description: Foreign key to int_organizations, the organization in the page path at event time.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_organizations')
+                field: organization_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces, the workspace in the page path.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+      - name: event_date
+        description: The UTC date of event_at; active days count distinct event_dates.
+      - name: product_area
+        description: The area the event counts toward; settings, workspace_home and login are not activity.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["tracing", "playground", "studio", "datasets", "experiments", "settings", "workspace_home", "login"]
+
+  - name: int_runs
+    description: Runs with product_area and counts_as_activity (var active_run_sources).
+    columns:
+      - name: run_id
+        description: Primary key, one row per run.
+        data_tests: [unique, not_null]
+      - name: organization_id
+        description: Foreign key to int_organizations, the workspace's owner at run time.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_organizations')
+                field: organization_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+      - name: trace_id
+        description: The trace the run belongs to.
+      - name: run_date
+        description: The UTC day the run started (cast of started_at).
+        data_tests: [not_null]
+      - name: parent_run_id
+        description: Foreign key to int_runs, the parent run; null for a root run.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_runs')
+                field: run_id
+      - name: thread_id
+        description: The conversation thread the run belongs to, when the client sends one; null otherwise (169,813 of 203,842 runs).
+      - name: product_area
+        description: The area the run counts toward, from its run_source.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["tracing", "playground", "studio", "experiments", "online_evaluation", "sample_data"]
+      - name: counts_as_activity
+        description: run_source is one of var('active_run_sources').

@@ -1,0 +1,200 @@
+version: 2
+
+models:
+  - name: stg_app__organizations
+    description: One row per organization, the three regions unioned. is_personal is derived from the name where the region's export lacks the column (apac).
+    columns:
+      - name: organization_id
+        description: Primary key, unique across regions.
+        data_tests: [unique, not_null]
+      - name: created_by_user_id
+        description: Foreign key to stg_app__users, the user who created the organization.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: is_personal
+        description: A single-member personal organization. Read from the source, or derived as display_name = 'Personal' where the source has no column.
+        data_tests: [not_null]
+      - name: is_personal_derived
+        description: True where is_personal was derived rather than read.
+      - name: region
+        description: The regional deployment the row came from.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["us", "eu", "apac"]
+
+  - name: stg_app__users
+    description: One row per user. is_internal marks staff by email domain (var internal_email_domain).
+    columns:
+      - name: user_id
+        description: Primary key, unique across regions.
+        data_tests: [unique, not_null]
+      - name: is_internal
+        description: The user's email is on the internal domain.
+
+  - name: stg_app__workspaces
+    description: One row per workspace. current_organization_id is today's owner; workspaces can change owner, so usage history must not be attributed through it.
+    columns:
+      - name: workspace_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: current_organization_id
+        description: Foreign key to stg_app__organizations, the organization that owns the workspace now.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__organizations')
+                field: organization_id
+
+  - name: stg_app__workspace_memberships
+    description: One row per user per workspace.
+    columns:
+      - name: membership_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: user_id
+        description: Foreign key to stg_app__users, the member.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+
+  - name: stg_app__runs
+    description: One row per run. organization_id is the workspace's owner at run time.
+    columns:
+      - name: run_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: trace_id
+        description: The trace the run belongs to; a root run's trace_id is its own run_id.
+      - name: thread_id
+        description: The conversation thread the run belongs to, when the client sends one; null otherwise.
+      - name: parent_run_id
+        description: Foreign key to stg_app__runs, the parent run; null for a root run.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__runs')
+                field: run_id
+      - name: organization_id
+        description: Foreign key to stg_app__organizations, the owner when the run happened, not the workspace's current owner.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__organizations')
+                field: organization_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces, the workspace the run was logged to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+      - name: run_source
+        description: What started the run; var('active_run_sources') lists the ones that are a customer using the product.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["sdk", "experiment", "playground", "studio", "sample_data", "online_evaluator"]
+
+  - name: stg_segment__pages
+    description: One row per page view after dropping repeated event_ids and double-fired views (see macro dedup_events). event_at is received_at, because client timestamps run from 1970 to 2034.
+    columns:
+      - name: event_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: user_id
+        description: Foreign key to stg_app__users; null for anonymous views, which are all on the login page. Events belong to a user by user_id only.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: anonymous_id
+        description: The browser's anonymous id; not resolved to a user (see D11).
+      - name: organization_id
+        description: Foreign key to stg_app__organizations, parsed from the page path (/o/<org>/...); the organization at view time.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__organizations')
+                field: organization_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces, parsed from the page path (/w/<workspace>/...).
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+      - name: event_at
+        description: Server receive time (UTC).
+        data_tests: [not_null]
+      - name: page_area
+        description: The product area from the path; experiments is a dataset's compare page.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["projects", "playground", "studio", "datasets", "experiments", "settings", "workspace_home", "login"]
+
+  - name: stg_segment__tracks
+    description: One row per track call after the same deduplication as pages.
+    columns:
+      - name: event_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: anonymous_id
+        description: The browser's anonymous id; not used, since every track call has a user_id (see D11).
+      - name: user_id
+        description: Foreign key to stg_app__users; every track call has one.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: organization_id
+        description: Foreign key to stg_app__organizations, parsed from the page the call fired on.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__organizations')
+                field: organization_id
+      - name: workspace_id
+        description: Foreign key to stg_app__workspaces, parsed from the page the call fired on.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__workspaces')
+                field: workspace_id
+
+  - name: stg_segment__identifies
+    description: One row per identify call, repeated event_ids dropped. Not used by the marts, because every anonymous page view is a login page.
+    columns:
+      - name: event_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: user_id
+        description: Foreign key to stg_app__users, the user the anonymous_id was identified as.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_app__users')
+                field: user_id
+      - name: anonymous_id
+        description: The browser's anonymous id at the moment of identifying.

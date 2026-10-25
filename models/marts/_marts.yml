@@ -1,0 +1,105 @@
+version: 2
+
+models:
+  - name: dim_organizations
+    description: One row per organization, internal ones included and flagged. Join the facts to it for plan, region and personal.
+    columns:
+      - name: organization_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: created_by_user_id
+        description: Foreign key to dim_users, the user who created the organization.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: is_internal
+        description: Internal (the listed seed or derived); the facts leave these out.
+      - name: is_personal
+        description: A single-member personal organization.
+
+  - name: dim_users
+    description: One row per user, internal staff included and flagged.
+    columns:
+      - name: user_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: fct_user_activity_monthly
+    description: "Grain: customer user x customer organization x period of var('activity_grain') (a calendar month, UTC, by default), April to September 2026, for periods with any product activity. A user active in two organizations has two rows, so count platform-wide active users as count(distinct user_id) filter (where is_active_user)."
+    columns:
+      - name: user_org_month_id
+        description: Primary key, a surrogate key of user_id, organization_id and activity_month.
+        data_tests: [unique, not_null]
+      - name: activity_month
+        description: Grain column, the first day of the period (a month by default; a week's Monday when var('activity_grain') is week).
+        data_tests: [not_null]
+      - name: user_id
+        description: Grain column and foreign key to dim_users, a customer (non-internal) user.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: organization_id
+        description: Grain column and foreign key to dim_organizations, a customer organization the user was active in.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_organizations')
+                field: organization_id
+      - name: active_days
+        description: Distinct days with product activity in this organization in the period. Adds up within an organization (user-days); it isn't the user's platform days, because a day active in two organizations is in both rows (use user_active_days).
+      - name: product_events
+        description: Product-area page views and track events in this organization in the period. Additive.
+      - name: tracing_events
+        description: Of product_events, those in tracing. Additive; likewise playground_events, studio_events, datasets_events and experiments_events.
+      - name: is_active
+        description: active_days >= var('active_user_min_days'); the user counts as an active user of this organization.
+      - name: user_active_days
+        description: "Distinct days with product activity across all the user's customer organizations in the period. A user-level value repeated on each of the user's organization rows, so it isn't additive across organizations: take one value per user (any_value or max by user_id). Summed over September 2026's rows it gives 5,165 against 4,823 over the 1,046 distinct users."
+      - name: is_active_user
+        description: user_active_days >= var('active_user_min_days'); the user counts as an active user of the platform. Count it with count(distinct user_id).
+      - name: product_areas
+        description: The product areas the user touched in this organization in the period.
+
+  - name: fct_org_activity_monthly
+    description: "Grain: customer organization x period of var('activity_grain') (a calendar month, UTC, by default), April to September 2026, from the organization's first period, zero rows included. The answer to which customers are active and which product areas they use."
+    columns:
+      - name: org_month_id
+        description: Primary key, a surrogate key of organization_id and activity_month.
+        data_tests: [unique, not_null]
+      - name: organization_id
+        description: Grain column and foreign key to dim_organizations, a customer organization.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_organizations')
+                field: organization_id
+      - name: activity_month
+        description: Grain column, the first day of the period (a month by default; a week's Monday when var('activity_grain') is week).
+        data_tests: [not_null]
+      - name: active_users
+        description: "Users active in this organization in the period (is_active in fct_user_activity_monthly). Not additive across organizations: a user active in two organizations counts in both, so summing it overstates platform-wide active users (1,084 summed against 1,046 distinct in September 2026). Count distinct users from fct_user_activity_monthly instead."
+      - name: active_runs
+        description: Runs from var('active_run_sources'); sample data and online evaluators excluded. Additive across organizations and periods.
+      - name: active_traces
+        description: Distinct traces with an active-source run in the period. Additive across organizations; not across periods, because a trace with runs in two periods counts in both.
+      - name: tracing_runs
+        description: Runs in the tracing area (run source sdk). Additive; likewise playground_runs, studio_runs, experiments_runs, online_evaluation_runs and sample_data_runs, which include runs that don't count as activity.
+      - name: active_tokens
+        description: Total tokens of active-source runs. Additive.
+      - name: is_active
+        description: At least var('active_org_min_users') active users, or at least var('active_org_min_runs') active runs.
+      - name: activity_type
+        description: ui_and_runs, ui_only, runs_only or inactive.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["ui_and_runs", "ui_only", "runs_only", "inactive"]
+      - name: product_areas
+        description: The product areas the organization used in the period, from user events or runs.

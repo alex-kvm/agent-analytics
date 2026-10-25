@@ -1,0 +1,138 @@
+version: 2
+
+models:
+  - name: metricflow_time_spine
+    description: Daily time spine for MetricFlow.
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        description: One day.
+        granularity: day
+        data_tests: [unique, not_null]
+  - name: sem_activity_daily
+    description: Day x customer organization x customer user with product activity, plus day x organization rows for active-source runs.
+    columns:
+      - name: activity_row_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: activity_date
+        description: Grain column, the UTC day; MetricFlow's metric_time.
+        data_tests: [not_null]
+      - name: organization_id
+        description: Grain column and foreign key to dim_organizations, a customer organization.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_organizations')
+                field: organization_id
+      - name: user_id
+        description: Grain column and foreign key to dim_users, a customer user; null on active-run rows, which have no user.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: signal
+        description: user_activity (a user's product activity that day) or active_run (an active-source run that day).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["user_activity", "active_run"]
+  - name: sem_runs
+    description: Runs in customer organizations with their product area.
+    columns:
+      - name: run_id
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: run_date
+        description: The UTC day the run started; MetricFlow's metric_time.
+        data_tests: [not_null]
+      - name: organization_id
+        description: Foreign key to dim_organizations, the workspace's owner when the run ran; a customer organization, without personal ones when var('include_personal_orgs') is false.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_organizations')
+                field: organization_id
+      - name: product_area
+        description: The area the run counts toward, from its run source.
+      - name: counts_as_activity
+        description: run_source is one of var('active_run_sources').
+
+semantic_models:
+  - name: activity
+    description: Who did anything that counts as activity, by day. Distinct counts give active organizations and active users at any grain.
+    model: ref('sem_activity_daily')
+    defaults:
+      agg_time_dimension: activity_date
+    entities:
+      - name: activity_row
+        type: primary
+        expr: activity_row_id
+      - name: organization
+        type: foreign
+        expr: organization_id
+      - name: user
+        type: foreign
+        expr: user_id
+    dimensions:
+      - name: activity_date
+        type: time
+        type_params:
+          time_granularity: day
+      - name: signal
+        type: categorical
+    measures:
+      - name: organizations_with_activity
+        agg: count_distinct
+        expr: organization_id
+      - name: users_with_activity
+        agg: count_distinct
+        expr: user_id
+
+  - name: runs
+    description: Runs in customer organizations by product area.
+    model: ref('sem_runs')
+    defaults:
+      agg_time_dimension: run_date
+    entities:
+      - name: run
+        type: primary
+        expr: run_id
+      - name: run_organization
+        type: foreign
+        expr: organization_id
+    dimensions:
+      - name: run_date
+        type: time
+        type_params:
+          time_granularity: day
+      - name: product_area
+        type: categorical
+    measures:
+      - name: run_count
+        agg: sum
+        expr: "1"
+
+metrics:
+  - name: active_organizations
+    label: Active organizations
+    description: Customer organizations with an active user or an active-source run in the period (thresholds of 1).
+    type: simple
+    type_params:
+      measure: organizations_with_activity
+  - name: active_users
+    label: Active users (distinct)
+    description: Distinct customer users with product activity in the period, counted once across organizations.
+    type: simple
+    type_params:
+      measure: users_with_activity
+  - name: runs
+    label: Runs
+    description: Runs in customer organizations; group by run__product_area for runs by area.
+    type: simple
+    type_params:
+      measure: run_count

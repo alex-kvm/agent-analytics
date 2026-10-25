@@ -1,0 +1,10 @@
+version: 2
+
+seeds:
+  - name: internal_organizations
+    description: The hand-maintained list of internal organizations. It is incomplete; see int_organizations.
+  - name: product_areas
+    description: Maps each page area, track event and run source to a product area. is_activity marks the user signals that count as product activity; for runs, var('active_run_sources') decides.
+    columns:
+      - name: product_area
+        data_tests: [not_null]

@@ -10,3 +10,50 @@ analysis-paths: ["analyses"]
 
 clean-targets: ["target", "dbt_packages"]
 
+
+# Every definition the product team might want to change is a var, so a change is one edit here
+# (or --vars on the command line) followed by `dbt build`.
+vars:
+  regions: ["us", "eu", "apac"]
+  internal_email_domain: "internal.example"
+  # Run sources that are a customer using the product. online_evaluator runs are automated (they count toward
+  # the evaluation area but don't make an organization active on their own); sample_data runs are onboarding
+  # fixtures and never count.
+  active_run_sources: ["sdk", "experiment", "playground", "studio"]
+  # A user is active in a month with product activity on at least this many distinct days.
+  active_user_min_days: 1
+  # An organization is active in a period with at least this many active users, or with at least this many
+  # active-source runs.
+  active_org_min_users: 1
+  active_org_min_runs: 1
+  # The reporting period for both facts and the organization spine: month (the default) or week.
+  activity_grain: month
+  # Personal organizations (one member, named Personal) count as customers; false leaves them out of every fact.
+  include_personal_orgs: true
+  # Two events from the same sender on the same path closer than this are one double-fired event.
+  double_fire_window_ms: 1000
+  # Complete months only: April to September 2026. October has three days of events.
+  reporting_start: "2026-04-01"
+  reporting_end: "2026-10-01"
+
+models:
+  agent_analytics:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+    semantic:
+      +materialized: table
+    reports:
+      +materialized: table
+
+seeds:
+  agent_analytics:
+    product_areas:
+      +column_types:
+        signal_type: varchar
+        signal_value: varchar
+        product_area: varchar
+        is_activity: boolean
